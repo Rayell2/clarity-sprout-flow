@@ -75,17 +75,19 @@ Clarinet.test({
 });
 
 Clarinet.test({
-    name: "Test achievement tracking",
+    name: "Test achievement tracking and rewards",
     async fn(chain: Chain, accounts: Map<string, Account>) {
         const wallet_1 = accounts.get('wallet_1')!;
         
-        // Add a plant to trigger achievement update
-        chain.mineBlock([
-            Tx.contractCall('plant-care', 'add-plant', [
-                types.ascii("Pothos"),
-                types.ascii("Low maintenance, water when dry")
-            ], wallet_1.address)
-        ]);
+        // Add 5 plants to trigger achievement reward
+        for(let i = 0; i < 5; i++) {
+            chain.mineBlock([
+                Tx.contractCall('plant-care', 'add-plant', [
+                    types.ascii("Plant " + i),
+                    types.ascii("Care schedule " + i)
+                ], wallet_1.address)
+            ]);
+        }
         
         let achievementBlock = chain.mineBlock([
             Tx.contractCall('plant-care', 'get-user-achievements', [
@@ -94,6 +96,6 @@ Clarinet.test({
         ]);
         
         const achievements = achievementBlock.receipts[0].result.expectOk().expectSome();
-        assertEquals(achievements['plants-added'], types.uint(1));
+        assertEquals(achievements['plants-added'], types.uint(5));
     }
 });

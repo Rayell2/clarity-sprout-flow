@@ -6,10 +6,12 @@ A blockchain-based gardening companion app that allows users to create and share
 - Share gardening tips and advice
 - Community rewards for valuable contributions
 - Plant care achievements and badges
+- Single vote per user for each tip
+- Track tip voters to prevent duplicate voting
 
 ## Smart Contract
 The smart contract handles:
 - Plant care schedule management
-- Community tip submissions and voting
+- Community tip submissions and voting with duplicate prevention
 - Reward token distribution
 - Achievement tracking

@@ -54,6 +54,15 @@ Clarinet.test({
         
         voteBlock.receipts[0].result.expectOk().expectBool(true);
         
+        // Try voting again with same user - should fail
+        let duplicateVote = chain.mineBlock([
+            Tx.contractCall('plant-care', 'vote-for-tip', [
+                types.uint(1)
+            ], wallet_2.address)
+        ]);
+        
+        duplicateVote.receipts[0].result.expectErr().expectUint(103);
+        
         let getTip = chain.mineBlock([
             Tx.contractCall('plant-care', 'get-tip', [
                 types.uint(1)

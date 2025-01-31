@@ -27,6 +27,7 @@
     author: principal,
     content: (string-ascii 500),
     votes: uint,
+    voters: (list 50 principal),
     created-at: uint
   }
 )
@@ -76,6 +77,7 @@
                 author: tx-sender,
                 content: content,
                 votes: u0,
+                voters: (list),
                 created-at: block-height
             }
         ))
@@ -89,10 +91,15 @@
         (
             (tip (unwrap! (map-get? gardening-tips {tip-id: tip-id}) err-invalid-tip))
             (current-votes (get votes tip))
+            (voters (get voters tip))
         )
+        (asserts! (is-none (index-of voters tx-sender)) err-already-voted)
         (map-set gardening-tips
             {tip-id: tip-id}
-            (merge tip {votes: (+ current-votes u1)})
+            (merge tip {
+              votes: (+ current-votes u1),
+              voters: (unwrap! (as-max-len? (append voters tx-sender) u50) err-invalid-tip)
+            })
         )
         ;; Reward tip author
         (try! (ft-mint? sprout-token u1 (get author tip)))

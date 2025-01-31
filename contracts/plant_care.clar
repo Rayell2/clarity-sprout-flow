@@ -3,9 +3,10 @@
 ;; Constants
 (define-constant contract-owner tx-sender)
 (define-constant err-owner-only (err u100))
-(define-constant err-invalid-plant (err u101))
+(define-constant err-invalid-plant (err u101)) 
 (define-constant err-invalid-tip (err u102))
 (define-constant err-already-voted (err u103))
+(define-constant achievement-reward-threshold u5)
 
 ;; Define token for community rewards
 (define-fungible-token sprout-token)
@@ -107,7 +108,7 @@
     )
 )
 
-;; Achievement tracking
+;; Achievement tracking with rewards
 (define-private (update-achievement (user principal))
     (let
         (
@@ -115,12 +116,19 @@
                 {plants-added: u0, tips-shared: u0, total-votes: u0}
                 (map-get? user-achievements {user: user})
             ))
+            (new-plants-added (+ (get plants-added current-achievements) u1))
         )
         (map-set user-achievements
             {user: user}
-            (merge current-achievements {plants-added: (+ (get plants-added current-achievements) u1)})
+            (merge current-achievements {plants-added: new-plants-added})
         )
-        (ok true)
+        ;; Reward users for reaching achievement milestones
+        (if (and 
+            (> new-plants-added u0)
+            (is-eq (mod new-plants-added achievement-reward-threshold) u0))
+            (try! (ft-mint? sprout-token u5 user))
+            (ok true)
+        )
     )
 )
 

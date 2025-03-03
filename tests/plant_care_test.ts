@@ -33,4 +33,19 @@ Clarinet.test({
   }
 });
 
-// [Previous tests remain unchanged...]
+Clarinet.test({
+  name: "Test plant addition with invalid input",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const wallet_1 = accounts.get('wallet_1')!;
+    
+    let block = chain.mineBlock([
+      Tx.contractCall('plant-care', 'add-plant', [
+        types.ascii(""),
+        types.ascii("Indoor"),
+        types.ascii("Water weekly")
+      ], wallet_1.address)
+    ]);
+    
+    block.receipts[0].result.expectErr().expectUint(107);
+  }
+});

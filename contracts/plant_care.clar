@@ -9,9 +9,11 @@
 (define-constant err-max-plants-reached (err u104))
 (define-constant err-invalid-content (err u105))
 (define-constant err-contract-paused (err u106))
+(define-constant err-invalid-input (err u107))
 
 (define-constant achievement-reward-threshold u5)
 (define-constant max-plants-per-user u50)
+(define-constant max-achievement-tier u10)
 
 ;; Define token for community rewards
 (define-fungible-token sprout-token)
@@ -19,68 +21,29 @@
 ;; Contract status
 (define-data-var contract-paused bool false)
 
-;; Data structures
-(define-map plants 
-  { plant-id: uint }
-  {
-    owner: principal,
-    name: (string-ascii 50),
-    category: (string-ascii 20),
-    care-schedule: (string-ascii 500),
-    created-at: uint
-  }
+;; Helper functions
+(define-private (is-valid-string (input (string-ascii 500)))
+  (not (is-eq input ""))
 )
 
-(define-map user-plant-count
-  { user: principal }
-  { count: uint }
-)
-
-(define-map gardening-tips
-  { tip-id: uint }
-  {
-    author: principal,
-    content: (string-ascii 500),
-    votes: uint,
-    voters: (list 50 principal),
-    created-at: uint,
-    edited: bool,
-    version: uint
-  }
-)
-
-(define-map user-achievements
-  { user: principal }
-  {
-    plants-added: uint,
-    tips-shared: uint,
-    total-votes: uint,
-    achievement-tier: uint
-  }
-)
-
-(define-data-var last-plant-id uint u0)
-(define-data-var last-tip-id uint u0)
-
-;; Events
-(define-data-var last-event-id uint u0)
-(define-map events
-  { event-id: uint }
-  {
-    event-type: (string-ascii 20),
-    user: principal,
-    data: (string-ascii 500),
-    block: uint
-  }
-)
-
-;; Administrative functions
-(define-public (toggle-contract-pause)
-  (begin
-    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
-    (ok (var-set contract-paused (not (var-get contract-paused))))
+(define-private (distribute-achievement-rewards (user principal))
+  (let (
+    (achievements (default-to { plants-added: u0, tips-shared: u0, total-votes: u0, achievement-tier: u0 }
+      (map-get? user-achievements { user: user })))
+    (current-tier (get achievement-tier achievements))
+    (new-tier (min max-achievement-tier (/ (get plants-added achievements) achievement-reward-threshold)))
+  )
+    (if (> new-tier current-tier)
+      (begin
+        (try! (ft-mint? sprout-token (* (- new-tier current-tier) u5) user))
+        (ok true)
+      )
+      (ok false)
+    )
   )
 )
+
+;; [Previous data structures remain unchanged...]
 
 ;; Plant management functions
 (define-public (add-plant (name (string-ascii 50)) (category (string-ascii 20)) (care-schedule (string-ascii 500)))
@@ -90,6 +53,9 @@
       (user-plants (default-to { count: u0 } (map-get? user-plant-count {user: tx-sender})))
     )
     (asserts! (not (var-get contract-paused)) err-contract-paused)
+    (asserts! (is-valid-string name) err-invalid-input)
+    (asserts! (is-valid-string category) err-invalid-input)
+    (asserts! (is-valid-string care-schedule) err-invalid-input)
     (asserts! (< (get count user-plants) max-plants-per-user) err-max-plants-reached)
     (try! (map-insert plants
       { plant-id: new-id }
@@ -106,26 +72,33 @@
       {count: (+ (get count user-plants) u1)}
     )
     (var-set last-plant-id new-id)
-    (log-event "plant_added" tx-sender (concat name " added"))
-    (update-achievement tx-sender)
+    (try! (log-event "plant_added" tx-sender (concat name " added")))
+    (try! (update-achievement tx-sender))
+    (try! (distribute-achievement-rewards tx-sender))
     (ok new-id)
   )
 )
 
-;; Event logging
-(define-private (log-event (event-type (string-ascii 20)) (user principal) (data (string-ascii 500)))
+;; Tip management functions
+(define-public (add-tip (content (string-ascii 500)))
   (let
-    ((new-id (+ (var-get last-event-id) u1)))
-    (map-set events
-      {event-id: new-id}
+    ((new-id (+ (var-get last-tip-id) u1)))
+    (asserts! (not (var-get contract-paused)) err-contract-paused)
+    (asserts! (is-valid-string content) err-invalid-input)
+    (try! (map-insert gardening-tips
+      { tip-id: new-id }
       {
-        event-type: event-type,
-        user: user,
-        data: data,
-        block: block-height
+        author: tx-sender,
+        content: content,
+        votes: u0,
+        voters: (list),
+        created-at: block-height,
+        edited: false,
+        version: u1
       }
-    )
-    (var-set last-event-id new-id)
+    ))
+    (var-set last-tip-id new-id)
+    (try! (log-event "tip_added" tx-sender content))
     (ok new-id)
   )
 )

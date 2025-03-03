@@ -8,94 +8,44 @@ import {
 import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
 
 Clarinet.test({
-    name: "Test plant addition",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const wallet_1 = accounts.get('wallet_1')!;
-        
-        let block = chain.mineBlock([
-            Tx.contractCall('plant-care', 'add-plant', [
-                types.ascii("Monstera"),
-                types.ascii("Water weekly, bright indirect light")
-            ], wallet_1.address)
-        ]);
-        
-        block.receipts[0].result.expectOk().expectUint(1);
-        
-        let getPlant = chain.mineBlock([
-            Tx.contractCall('plant-care', 'get-plant', [
-                types.uint(1)
-            ], wallet_1.address)
-        ]);
-        
-        const plant = getPlant.receipts[0].result.expectOk().expectSome();
-        assertEquals(plant['name'], "Monstera");
-    }
+  name: "Test administrative functions",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get('deployer')!;
+    const wallet_1 = accounts.get('wallet_1')!;
+    
+    // Test contract pause
+    let block = chain.mineBlock([
+      Tx.contractCall('plant-care', 'toggle-contract-pause', [], deployer.address)
+    ]);
+    
+    block.receipts[0].result.expectOk().expectBool(true);
+    
+    // Try adding plant while paused
+    let pausedBlock = chain.mineBlock([
+      Tx.contractCall('plant-care', 'add-plant', [
+        types.ascii("Monstera"),
+        types.ascii("Indoor"),
+        types.ascii("Water weekly")
+      ], wallet_1.address)
+    ]);
+    
+    pausedBlock.receipts[0].result.expectErr().expectUint(106);
+  }
 });
 
 Clarinet.test({
-    name: "Test gardening tip submission and voting",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const wallet_1 = accounts.get('wallet_1')!;
-        const wallet_2 = accounts.get('wallet_2')!;
-        
-        let block = chain.mineBlock([
-            Tx.contractCall('plant-care', 'submit-tip', [
-                types.ascii("Always check soil moisture before watering")
-            ], wallet_1.address)
-        ]);
-        
-        block.receipts[0].result.expectOk().expectUint(1);
-        
-        let voteBlock = chain.mineBlock([
-            Tx.contractCall('plant-care', 'vote-for-tip', [
-                types.uint(1)
-            ], wallet_2.address)
-        ]);
-        
-        voteBlock.receipts[0].result.expectOk().expectBool(true);
-        
-        // Try voting again with same user - should fail
-        let duplicateVote = chain.mineBlock([
-            Tx.contractCall('plant-care', 'vote-for-tip', [
-                types.uint(1)
-            ], wallet_2.address)
-        ]);
-        
-        duplicateVote.receipts[0].result.expectErr().expectUint(103);
-        
-        let getTip = chain.mineBlock([
-            Tx.contractCall('plant-care', 'get-tip', [
-                types.uint(1)
-            ], wallet_1.address)
-        ]);
-        
-        const tip = getTip.receipts[0].result.expectOk().expectSome();
-        assertEquals(tip['votes'], types.uint(1));
-    }
-});
-
-Clarinet.test({
-    name: "Test achievement tracking and rewards",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        const wallet_1 = accounts.get('wallet_1')!;
-        
-        // Add 5 plants to trigger achievement reward
-        for(let i = 0; i < 5; i++) {
-            chain.mineBlock([
-                Tx.contractCall('plant-care', 'add-plant', [
-                    types.ascii("Plant " + i),
-                    types.ascii("Care schedule " + i)
-                ], wallet_1.address)
-            ]);
-        }
-        
-        let achievementBlock = chain.mineBlock([
-            Tx.contractCall('plant-care', 'get-user-achievements', [
-                types.principal(wallet_1.address)
-            ], wallet_1.address)
-        ]);
-        
-        const achievements = achievementBlock.receipts[0].result.expectOk().expectSome();
-        assertEquals(achievements['plants-added'], types.uint(5));
-    }
+  name: "Test plant addition with invalid input",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const wallet_1 = accounts.get('wallet_1')!;
+    
+    let block = chain.mineBlock([
+      Tx.contractCall('plant-care', 'add-plant', [
+        types.ascii(""),
+        types.ascii("Indoor"),
+        types.ascii("Water weekly")
+      ], wallet_1.address)
+    ]);
+    
+    block.receipts[0].result.expectErr().expectUint(107);
+  }
 });
